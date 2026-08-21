@@ -21,6 +21,7 @@ public:
 	void read_raw(CParser & parser, bool check = true);
 	void add(const cxxSurfaceComp & comp, LDBLE extensive);
 	void multiply(LDBLE extensive);
+	void Update(const cxxNameDouble &nd);
 
 	const std::string &Get_formula() const {return this->formula;}
 	void Set_formula(const char * f) {this->formula = f ? f : "";}

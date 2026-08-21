@@ -725,6 +725,20 @@ Sort_comps(void)
 	}
 }
 /* ---------------------------------------------------------------------- */
+LDBLE
+cxxSurface::Get_total(const char *string) const
+{
+	cxxNameDouble::const_iterator it = this->totals.find(string);
+	if (it == this->totals.end())
+	{
+		return (0.0);
+	}
+	else
+	{
+		return (it->second);
+	}
+}
+/* ---------------------------------------------------------------------- */
 void
 cxxSurface::Serialize(Dictionary & dictionary, std::vector < int >&ints, 
 	std::vector < double >&doubles)
