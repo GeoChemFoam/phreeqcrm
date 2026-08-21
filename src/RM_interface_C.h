@@ -3592,6 +3592,28 @@ Called by root.
 */
 IRM_DLL_EXPORT IRM_RESULT RM_GetSurfaceName(int id, int num, char *name, int l1);
 /**
+Transfer surface area from the reaction cells to the array given in the argument list (@a vol).
+Surface area are those calculated by the reaction module.
+@param id                The instance @a id returned from @ref RM_Create.
+@param name              name of the surface
+@param a                Array to receive the surface area. Dimension of the array is (@a nxyz),
+where @a nxyz is the number of user grid cells. Values for inactive cells are set to 1e30.
+@retval IRM_RESULT         0 is success, negative is failure (See @ref RM_DecodeError).
+@par C Example:
+@htmlonly
+<CODE>
+<PRE>
+a = (double *) malloc((size_t) (nxyz * sizeof(double)));
+status = RM_RunCells(id);
+status = RM_GetSurfaceArea(id, a);
+</PRE>
+</CODE>
+@endhtmlonly
+@par MPI:
+Called by root, workers must be in the loop of @ref RM_MpiWorker.
+*/
+IRM_DLL_EXPORT IRM_RESULT RM_GetSurfaceArea(int id, std::string name, double *a);
+/**
 Returns the number of surface species (such as "Hfo_wOH") in the initial-phreeqc module.
 @ref RM_FindComponents must be called before @ref RM_GetSurfaceSpeciesCount.
 This method may be useful when generating selected output definitions related to surfaces.
@@ -3686,6 +3708,42 @@ Utilities::strcat_safe(input, MAX_LENGTH, line);
 Called by root.
 */
 IRM_DLL_EXPORT IRM_RESULT RM_GetSurfaceType(int id, int num, char *name, int l1);
+/**
+Transfer concentrations of surface species to the array argument (@a species_conc)
+This method is intended for use with multicomponent-diffusion transport calculations,
+and @ref RM_SetSpeciesSaveOn must be set to @a true.
+The list of surface
+species is determined by @ref RM_FindComponents and includes all
+surface species that can be made from the set of components.
+
+@param id               The instance @a id returned from @ref RM_Create.
+@param species_conc     Array to receive the surface species concentrations.
+Dimension of the array is (@a nxyz, @a nspecies),
+where @a nxyz is the number of user grid cells (@ref RM_GetGridCellCount),
+and @a nspecies is the number of surface species (@ref RM_GetSurfaceSpeciesCount).
+
+@retval IRM_RESULT      0 is success, negative is failure (See @ref RM_DecodeError).
+@see                    @ref RM_FindComponents, @ref RM_GetSurfaceSpeciesCount,
+@ref RM_GetSurfaceSpeciesName, @ref RM_SurfaceSpeciesConcentrations2Module, @ref RM_GetSpeciesSaveOn, @ref RM_SetSpeciesSaveOn.
+
+@par C Example:
+@htmlonly
+<CODE>
+<PRE>
+status = RM_SetSpeciesSaveOn(id, 1);
+ncomps = RM_FindComponents(id);
+nspecies = RM_GetSurfaceSpeciesCount(id);
+nxyz = RM_GetGridCellCount(id);
+species_c = (double *) malloc((size_t) (nxyz * nspecies * sizeof(double)));
+status = RM_RunCells(id);
+status = RM_GetSurfaceSpeciesConcentrations(id, species_c);
+</PRE>
+</CODE>
+@endhtmlonly
+@par MPI:
+Called by root, workers must be in the loop of @ref RM_MpiWorker.
+*/
+IRM_DLL_EXPORT IRM_RESULT RM_GetSurfaceSpeciesConcentrations(int id, double *species_conc);
 /**
 Returns the number of threads, which is equal to the number of workers used to run in parallel with OPENMP.
 For the OPENMP version, the number of threads is set implicitly or explicitly with @ref RM_Create. For the
@@ -6069,6 +6127,45 @@ status = RM_RunCells(id);
 Called by root, workers must be in the loop of @ref RM_MpiWorker.
  */
 IRM_DLL_EXPORT IRM_RESULT RM_SpeciesConcentrations2Module(int id, double * species_conc);
+/**
+Set surface concentrations in the reaction cells
+based on the vector of surface species concentrations (@a species_conc).
+This method is intended for use with multicomponent-diffusion transport calculations,
+and @ref RM_SetSpeciesSaveOn must be set to @a true.
+The list of surface species is determined by @ref RM_FindComponents and includes all
+surface species that can be made from the set of components.
+The method determines the total concentration of a component
+by summing the molarities of the individual species times the stoichiometric
+coefficient of the element in each species.
+Surface compositions in the reaction cells are updated with these component concentrations.
+
+@param id               The instance @a id returned from @ref RM_Create.
+@param species_conc     Array of surface species concentrations. Dimension of the array is (@a nxyz, @a nspecies),
+where @a nxyz is the number of user grid cells (@ref RM_GetGridCellCount), and @a nspecies is the number of surface species (@ref RM_GetSurfaceSpeciesCount).
+Concentrations are moles per m2.
+@retval IRM_RESULT      0 is success, negative is failure (See @ref RM_DecodeError).
+@see                    @ref RM_FindComponents, @ref RM_GetSurfaceSpeciesConcentrations, @ref RM_GetSurfaceSpeciesCount,
+@ref RM_GetSurfaceSpeciesName, @ref RM_GetSpeciesSaveOn, @ref RM_SetSpeciesSaveOn.
+
+@par C Example:
+@htmlonly
+<CODE>
+<PRE>
+status = RM_SetSpeciesSaveOn(id, 1);
+ncomps = RM_FindComponents(id);
+nspecies = RM_GetSurfaceSpeciesCount(id);
+nxyz = RM_GetGridCellCount(id);
+species_c = (double *) malloc((size_t) (nxyz * nspecies * sizeof(double)));
+...
+status = RM_SurfaceSpeciesConcentrations2Module(id, species_c);
+status = RM_RunCells(id);
+</PRE>
+</CODE>
+@endhtmlonly
+@par MPI:
+Called by root, workers must be in the loop of @ref RM_MpiWorker.
+*/
+IRM_DLL_EXPORT IRM_RESULT RM_SurfaceSpeciesConcentrations2Module(int id, double * species_conc);
 /**
 Save the state of the chemistry in all model cells, including SOLUTIONs,
 EQUILIBRIUM_PHASES, EXCHANGEs, GAS_PHASEs, KINETICS, SOLID_SOLUTIONs, and SURFACEs.

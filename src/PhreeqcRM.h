@@ -77,6 +77,8 @@ enum {
 	METHOD_GETSPECIESCONCENTRATIONS,
 	METHOD_GETSPECIESLOG10GAMMAS,
 	METHOD_GETSPECIESLOG10MOLALITIES,
+	METHOD_GETSURFACEAREA,
+	METHOD_GETSURFACESPECIESCONCENTRATION,
 	METHOD_GETTEMPERATURE,
 	METHOD_GETVISCOSITY,
 	METHOD_INITIALPHREEQC2MODULE,
@@ -2794,6 +2796,27 @@ Called by root.
 const std::vector< std::string > &          GetSurfaceNames(void) const { return this->SurfaceNamesList; }
 
 /**
+Return a vector reference to the current surface area as calculated by the reaction module.
+Dimension of the vector will be @a nxyz, where @a nxyz is the number of user grid cells.
+Values for inactive cells are set to 1e30.
+@param name string name of surface
+@param a Vector reference to surface area
+@par C++ Example:
+@htmlonly
+<CODE>
+<PRE>
+status = phreeqc_rm.RunCells();
+std::vector<double> a;
+status = phreeqc_rm.GetSurfacePotential(name,a);
+</PRE>
+</CODE>
+@endhtmlonly
+@par MPI:
+Called by root, workers must be in the loop of @ref MpiWorker.
+*/
+IRM_RESULT                                GetSurfaceArea(std::string name, std::vector<double> & a);
+
+/**
 Returns a reference to the vector of surface species names (such as "Hfo_wOH").
 The list of surface species is derived from the list of components
 (@ref FindComponents) and the list of all surface site types (such as "Hfo_w")
@@ -2903,7 +2926,38 @@ oss << surf_types[i] << "   " << surf_names[i] << "\n";
 Called by root.
 */
 const std::vector< std::string > &          GetSurfaceTypes(void) const { return this->SurfaceTypesList; }
+/**
+Returns a vector reference to surface species concentrations (@a species_conc).
+This method is intended for use with multicomponent-diffusion transport calculations,
+and @ref SetSpeciesSaveOn must be set to @a true.
+The list of surface species is determined by @ref FindComponents and includes all
+surface species that can be made from the set of components.
 
+@param species_conc     Vector to receive the surface species concentrations.
+Dimension of the vector is set to @a nspecies times @a nxyz,
+where @a nspecies is the number of surface species (@ref GetSpeciesCount),
+and @a nxyz is the number of grid cells (@ref GetGridCellCount).
+@retval IRM_RESULT      0 is success, negative is failure (See @ref DecodeError).
+@see                    @ref FindComponents, @ref GetSurfaceSpeciesCount,
+@ref GetSurfaceSpeciesNames, @ref SurfaceSpeciesConcentrations2Module, @ref GetSpeciesSaveOn, @ref SetSpeciesSaveOn.
+
+@par C++ Example:
+@htmlonly
+<CODE>
+<PRE>
+status = phreeqc_rm.SetSpeciesSaveOn(true);
+int ncomps = phreeqc_rm.FindComponents();
+int npecies = phreeqc_rm.GetSurfaceSpeciesCount();
+status = phreeqc_rm.RunCells();
+std::vector<double> c;
+status = phreeqc_rm.GetSurfaceSpeciesConcentrations(c);
+</PRE>
+</CODE>
+@endhtmlonly
+@par MPI:
+Called by root, workers must be in the loop of @ref MpiWorker.
+ */
+	IRM_RESULT                                GetSurfaceSpeciesConcentrations(std::vector<double> & species_conc);
 /**
 Vector reference to the current temperatures of the cells.
 By default, the temperature vector is initialized to 25 C;
@@ -5492,7 +5546,46 @@ status = phreeqc_rm.RunCells();
 Called by root, workers must be in the loop of @ref MpiWorker.
  */
 IRM_RESULT								  SpeciesConcentrations2Module(const std::vector< double > & species_conc);
+/**
+Set surface concentrations in the reaction cells
+based on the vector of surface species concentrations (@a species_conc).
+This method is intended for use with multicomponent-diffusion transport calculations,
+and @ref SetSpeciesSaveOn must be set to @a true.
+The list of surface species is determined by @ref FindComponents and includes all
+surfaces species that can be made from the set of components.
+The method determines the total concentration of a component
+by summing the molarities of the individual species times the stoichiometric
+coefficient of the element in each species.
+Surface compositions in the reaction cells are updated with these component concentrations.
 
+@param species_conc     Vector of surface species concentrations. Dimension of the array is @a nspecies times @a nxyz,
+where  @a nspecies is the number of surface species (@ref GetSpeciesCount),
+and @a nxyz is the number of user grid cells (@ref GetGridCellCount).
+Concentrations are moles per m2.
+@retval IRM_RESULT      0 is success, negative is failure (See @ref DecodeError).
+@see                    @ref FindComponents, @ref GetSurfaceSpeciesConcentrations, @ref GetSurfaceSpeciesCount,
+@ref GetSurfaceSpeciesNames, @ref GetSpeciesSaveOn, @ref SetSpeciesSaveOn.
+@par C++ Example:
+@htmlonly
+<CODE>
+<PRE>
+status = phreeqc_rm.SetSpeciesSaveOn(true);
+int ncomps = phreeqc_rm.FindComponents();
+int nspecies = phreeqc_rm.GetSurfaceSpeciesCount();
+std::vector<double> c;
+status = phreeqc_rm.GetSurfaceSpeciesConcentrations(c);
+...
+SpeciesAdvectCpp(c, bc_conc, nspecies, nxyz, nbound);
+status = phreeqc_rm.SurfaceSpeciesConcentrations2Module(c);
+status = phreeqc_rm.RunCells();
+</PRE>
+</CODE>
+@endhtmlonly
+@par MPI:
+Called by root, workers must be in the loop of @ref MpiWorker.
+ */
+	IRM_RESULT								  SurfaceSpeciesConcentrations2Module(std::vector<double> & species_conc);
+/**
 /**
 Save the state of the chemistry in all model cells, including SOLUTIONs, 
 EQUILIBRIUM_PHASES, EXCHANGEs, GAS_PHASEs, KINETICS, SOLID_SOLUTIONs, and SURFACEs. 
@@ -5790,8 +5883,11 @@ protected:
 	std::vector <std::string> ExchangeSpeciesNamesList;
 	std::vector <std::string> ExchangeNamesList;
 	std::vector <std::string> SurfaceSpeciesNamesList;
+	std::vector <double> SurfaceSpeciesZList;
+	std::vector <cxxNameDouble> SurfaceSpeciesStoichiometry;
 	std::vector <std::string> SurfaceTypesList;
 	std::vector <std::string> SurfaceNamesList;
+	std::vector <std::string> SurfaceMastersList;
 
 	std::vector <std::string> EquilibriumPhasesList;
 	std::vector <std::string> GasComponentsList;

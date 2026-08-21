@@ -1586,6 +1586,29 @@ xsurface_save(int n_user)
 		}
 	} 
 
+	if (this->save_species)
+	{
+		// saves mol/L
+		temp_surface.Get_species_map().clear();
+		for (int j = 0; j < (int)this->s_x.size(); j++)
+		{
+			if (s_x[j]->type == SURF)
+			{
+				for (int i = 0; s_x[j]->next_elt[i].elt != NULL; i++)
+				{
+					if (s_x[j]->next_elt[i].elt->master->type != SURF) continue;
+					char * name = string_duplicate(s_x[j]->next_elt[i].elt->name);
+					char* ptr = strchr(name, '_');
+					if (ptr != NULL)
+						ptr[0] = '\0';
+					cxxSurfaceCharge *charge_ptr = temp_surface.Find_charge(name);
+					double area = charge_ptr->Get_specific_area();
+					temp_surface.Get_species_map()[s_x[j]->number] = s_x[j]->moles / area;
+					free_check_null(name);
+				}
+			}
+		}
+	}
 /*
  *   Finish up
  */

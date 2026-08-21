@@ -3054,8 +3054,11 @@ PhreeqcRM::FindComponents(void)
 			// write surface and save vectors
 			int next_surf = phast_iphreeqc_worker->PhreeqcPtr->next_user_number(Keywords::KEY_SURFACE);
 			this->SurfaceSpeciesNamesList.clear();
+			this->SurfaceSpeciesZList.clear();
+			this->SurfaceSpeciesStoichiometry.clear();
 			this->SurfaceTypesList.clear();
 			this->SurfaceNamesList.clear();
+			this->SurfaceMastersList.clear();
 			if (surface_types_set.size() > 0)
 			{
 				std::set<std::string>::iterator cit = surface_types_set.begin();
@@ -3076,9 +3079,18 @@ PhreeqcRM::FindComponents(void)
 					{
 						if (phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->type == SURF)
 						{
+					                s_num2rm_species_num[phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->number] = SurfaceSpeciesNamesList.size();
 							this->SurfaceSpeciesNamesList.push_back(phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->name);
+                                                        cxxNameDouble nd(phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->next_elt);
+                                                        this->SurfaceSpeciesZList.push_back(phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->z);
+                                                        this->SurfaceSpeciesStoichiometry.push_back(nd);
 							this->SurfaceTypesList.push_back(*cit);
 							this->SurfaceNamesList.push_back(surface_names_map[*cit]);
+					                for (int j = 0; phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->next_elt[j].elt != NULL; j++)
+					                {
+						            if (phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->next_elt[j].elt->master->type != SURF) continue;
+						            SurfaceMastersList.push_back(phast_iphreeqc_worker->PhreeqcPtr->s_x[i]->next_elt[j].elt->name);
+					                }
 						}
 					}
 					{
@@ -5237,6 +5249,281 @@ PhreeqcRM::GetSpeciesStoichiometrySWIG(std::vector<std::string>& species, std::v
 }
 #endif
 
+/* ---------------------------------------------------------------------- */
+IRM_RESULT
+PhreeqcRM::GetSurfaceArea(std::string name, std::vector<double> & a)
+/* ---------------------------------------------------------------------- */
+{
+	this->phreeqcrm_error_string.clear();
+	IRM_RESULT return_value = IRM_OK;
+	try
+	{
+#ifdef USE_MPI
+		if (this->mpi_myself == 0)
+		{
+			int method = METHOD_GETSURFACEAREA;
+			MPI_Bcast(&method, 1, MPI_INT, 0, phreeqcrm_comm);
+		}
+		// Fill in root ionic strength
+		if (this->mpi_myself == 0)
+		{
+			a.resize(this->nxyz, 0.0);
+			for (int n = 0; n < this->nthreads; n++)
+			{
+				for (int i = start_cell[n]; i <= this->end_cell[n]; i++)
+				{
+					cxxSurface *surf_ptr = this->GetWorkers()[n]->Get_surface(i);
+                                        if (surf_ptr == NULL)
+                                        {
+                                            continue;
+                                        }
+					cxxSurfaceCharge* charge_ptr = surf_ptr->Find_charge(name);
+                                        if (charge_ptr == NULL)
+                                        {
+                                            continue;
+                                        }
+					double d = charge_ptr->Get_specific_area();
+					for (size_t j = 0; j < backward_mapping[i].size(); j++)
+					{
+						int n = backward_mapping[i][j];
+						a[n] = d;
+					}
+				}
+			}
+		}
+		// Fill in worker concentrations
+		for (int n = 1; n < this->mpi_tasks; n++)
+		{
+			int ncells = this->end_cell[n] - start_cell[n] + 1;
+			if (this->mpi_myself == n)
+			{
+				a.resize(ncells, 0);
+				for (int j = this->start_cell[n]; j <= this->end_cell[n]; j++)
+				{
+					int j0 = j - this->start_cell[n];
+					{
+						cxxSurface *surf_ptr = this->GetWorkers()[n]->Get_surface(i);
+                                                if (surf_ptr == NULL)
+                                                {
+                                                    continue;
+                                                }
+						cxxSurfaceCharge* charge_ptr = surf_ptr->Find_charge(name);
+                                                if (charge_ptr == NULL)
+                                                {
+                                                    continue;
+                                                }
+						double d = charge_ptr->Get_specific_area();
+						a[j0] = d;
+					}
+				}
+				MPI_Send((void *)&psi.front(), ncells, MPI_DOUBLE, 0, 0, phreeqcrm_comm);
+			}
+			else if (this->mpi_myself == 0)
+			{
+				MPI_Status mpi_status;
+				double * recv_a = new double[ncells];
+				MPI_Recv(recv_a, ncells, MPI_DOUBLE, n, 0, phreeqcrm_comm, &mpi_status);
+				for (int i = this->start_cell[n]; i <= this->end_cell[n]; i++)
+				{
+					int i0 = i - this->start_cell[n];
+					for (size_t j = 0; j < backward_mapping[i].size(); j++)
+					{
+						int n = backward_mapping[i][j];
+						a[n] = recv_a[j0];
+					}
+				}
+				delete recv_psi;
+			}
+		}
+
+#else
+		a.resize(this->nxyz, 0.0);
+		for (int n = 0; n < this->nthreads; n++)
+		{
+			for (int i = start_cell[n]; i <= this->end_cell[n]; i++)
+			{
+				cxxSurface *surf_ptr = this->GetWorkers()[n]->Get_surface(i);
+                                if (surf_ptr == NULL)
+                                {
+                                    continue;
+                                }
+				cxxSurfaceCharge* charge_ptr = surf_ptr->Find_charge(name);
+                                if (charge_ptr == NULL)
+                                {
+                                    continue;
+                                }
+				double d = charge_ptr->Get_specific_area();
+				for (size_t j = 0; j < backward_mapping[i].size(); j++)
+				{
+					int n = backward_mapping[i][j];
+					a[n] = d;
+				}
+			}
+		}
+#endif
+	}
+	catch (...)
+	{
+		return_value = IRM_FAIL;
+	}
+	return this->ReturnHandler(return_value, "PhreeqcRM::GetSurfaceArea");
+}
+#ifdef USE_MPI
+/* ---------------------------------------------------------------------- */
+IRM_RESULT
+PhreeqcRM::GetSurfaceSpeciesConcentrations(std::vector<double> & species_conc)
+/* ---------------------------------------------------------------------- */
+{
+	this->phreeqcrm_error_string.clear();
+	if (this->mpi_myself == 0)
+	{
+		int method = METHOD_GETSURFACESPECIESCONCENTRATIONS;
+		MPI_Bcast(&method, 1, MPI_INT, 0, phreeqcrm_comm);
+	}
+
+	if (this->species_save_on)
+	{
+		size_t nspecies = this->SurfaceSpeciesNamesList.size();
+		// Fill in root concentrations
+		if (this->mpi_myself == 0)
+		{
+			species_conc.resize(nspecies * this->nxyz, 0);
+			for (int j = this->start_cell[0]; j <= this->end_cell[0]; j++)
+                        {
+                                std::vector<double> d;
+                                d.resize(this->SurfaceSpeciesNamesList.size(), 0);
+				{
+                                       cxxSurface *surf_ptr = this->workers[0]->Get_surface(j);
+                                       if (surf_ptr == NULL)
+                                       {
+                                           continue;
+                                       }
+					std::map<int,double>::iterator it = this->workers[0]->Get_surface(j)->Get_species_map().begin();
+					for ( ; it != this->workers[0]->Get_surface(j)->Get_species_map().end(); it++)
+					{
+						// it is pointing to a species number, concentration
+						int rm_species_num = this->s_num2rm_species_num[it->first];
+						d[rm_species_num] = it->second;
+					}
+				}
+				{
+					std::vector<int>::iterator it;
+					for (it = this->backward_mapping[j].begin(); it != this->backward_mapping[j].end(); it++)
+					{
+						double *d_ptr = &species_conc[*it];
+						for (size_t i = 0; i < d.size(); i++)
+						{
+							d_ptr[this->nxyz * i] = d[i];
+						}
+					}
+				}
+			}
+		}
+		// Fill in worker concentrations
+		for (int n = 1; n < this->mpi_tasks; n++)
+		{
+			int ncells = this->end_cell[n] - start_cell[n] + 1;
+			if (this->mpi_myself == n)
+			{
+				species_conc.resize(nspecies * ncells, 0);
+				for (int j = this->start_cell[n]; j <= this->end_cell[n]; j++)
+				{
+					int j0 = j - this->start_cell[n];
+					{
+                                                cxxSurface *surf_ptr = this->workers[0]->Get_surface(j);
+                                                if (surf_ptr == NULL)
+                                                {
+                                                    continue;
+                                                }
+						std::map<int, double>::iterator it = this->workers[0]->Get_surface(j)->Get_species_map().begin();
+						for (; it != this->workers[0]->Get_surface(j)->Get_species_map().end(); it++)
+						{
+							// it is pointing to a species number, concentration
+							int rm_species_num = this->s_num2rm_species_num[it->first];
+							species_conc[rm_species_num * ncells + j0] = it->second;
+						}
+					}
+				}
+				MPI_Send((void *)&species_conc.front(), (int)nspecies * ncells, MPI_DOUBLE, 0, 0, phreeqcrm_comm);
+			}
+			else if (this->mpi_myself == 0)
+			{
+				MPI_Status mpi_status;
+				double * recv_species = new double[(size_t)nspecies * ncells];
+				MPI_Recv(recv_species, (int)nspecies * ncells, MPI_DOUBLE, n, 0, phreeqcrm_comm, &mpi_status);
+				for (int j = this->start_cell[n]; j <= this->end_cell[n]; j++)
+				{
+					int j0 = j - this->start_cell[n];
+					std::vector<int>::iterator it;
+					for (it = this->backward_mapping[j].begin(); it != this->backward_mapping[j].end(); it++)
+					{
+						double *d_ptr = &species_conc[*it];
+						for (size_t i = 0; i < nspecies; i++)
+						{
+							d_ptr[this->nxyz * i] = recv_species[i * ncells + j0];
+						}
+					}
+				}
+				delete recv_species;
+			}
+		}
+	}
+	else
+	{
+		species_conc.clear();
+	}
+	return IRM_OK;
+}
+#else
+/* ---------------------------------------------------------------------- */
+IRM_RESULT
+PhreeqcRM::GetSurfaceSpeciesConcentrations(std::vector<double> & species_conc)
+/* ---------------------------------------------------------------------- */
+{
+	this->phreeqcrm_error_string.clear();
+	if (this->species_save_on)
+	{
+                size_t nspecies = this->SurfaceSpeciesNamesList.size();
+		species_conc.resize(nspecies * this->nxyz, 0);
+		for (int i = 0; i < this->nthreads; i++)
+		{
+			for (int j = this->start_cell[i]; j <= this->end_cell[i]; j++)
+                         {
+                                std::vector<double> d;
+                                d.resize(this->SurfaceSpeciesNamesList.size(), 0);
+				{
+                                        cxxSurface *surf_ptr = this->workers[i]->Get_surface(j);
+                                        if (surf_ptr == NULL)
+                                        {
+                                            continue;
+                                        }
+					std::map<int, double>::iterator it = this->workers[i]->Get_surface(j)->Get_species_map().begin();
+					for (; it != this->workers[i]->Get_surface(j)->Get_species_map().end(); it++)
+					{
+						// it is pointing to a species number, concentration
+						int rm_species_num = this->s_num2rm_species_num[it->first];
+						d[rm_species_num] = it->second;
+					}
+				}
+				std::vector<int>::iterator it;
+				for (it = this->backward_mapping[j].begin(); it != this->backward_mapping[j].end(); it++)
+				{
+					double *d_ptr = &species_conc[*it];
+					for (size_t i = 0; i < d.size(); i++)
+					{
+						d_ptr[this->nxyz * i] = d[i];
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		species_conc.clear();
+	}
+	return IRM_OK;
+}
+#endif
 #ifdef USE_MPI
 /* ---------------------------------------------------------------------- */
 const std::vector<double> &
@@ -12750,6 +13037,104 @@ PhreeqcRM::SpeciesConcentrations2Module(std::vector<double> & species_conc_root)
 }
 
 #endif
+/* ---------------------------------------------------------------------- */
+IRM_RESULT
+PhreeqcRM::SurfaceSpeciesConcentrations2Module(std::vector<double> & species_conc)
+/* ---------------------------------------------------------------------- */
+{
+	this->phreeqcrm_error_string.clear();
+#ifdef USE_MPI
+	if (this->mpi_myself == 0)
+	{
+		int method = METHOD_SURFACESPECIESCONCENTRATIONS2MODULE;
+		MPI_Bcast(&method, 1, MPI_INT, 0, phreeqcrm_comm);
+	}
+#endif
+	if (this->species_save_on)
+	{
+#ifdef USE_MPI
+		if (this->mpi_myself > 0)
+		{
+			species_conc.resize(this->SurfaceSpeciesNamesList.size() * this->nxyz, 0.0);
+		}
+		MPI_Bcast(&species_conc.front(), (int) this->SurfaceSpeciesNamesList.size() * nxyz, MPI_DOUBLE, 0, phreeqcrm_comm);
+		for (int n = this->mpi_myself; n < this->mpi_myself + 1; n++)
+#else
+		for (int n = 0; n < this->nthreads; n++)
+#endif
+		{
+			for (int i = this->start_cell[n]; i <= this->end_cell[n]; i++)
+			{
+				int j = this->backward_mapping[i][0];   // user grid number
+
+#ifdef USE_MPI
+				cxxSurface *surf_ptr = this->GetWorkers()[0]->Get_surface(i);
+#else
+				cxxSurface *surf_ptr = this->GetWorkers()[n]->Get_surface(i);
+
+#endif
+                                if (surf_ptr == NULL)
+                                {
+                                    continue;
+                                }				
+				for (size_t k = 0; k < surf_ptr->Get_surface_comps().size(); k++)
+				{
+				        double charge=0;
+					cxxSurfaceComp &comp_ref = surf_ptr->Get_surface_comps()[k];
+					std::string master = comp_ref.Get_master_element();
+					std::string name = comp_ref.Get_charge_name();
+					cxxSurfaceCharge *charge_ptr = surf_ptr->Find_charge(name);		
+                                        if (charge_ptr == NULL)
+                                        {
+                                            continue;
+                                        }
+					double area = charge_ptr->Get_specific_area();
+
+
+					cxxNameDouble surface_totals;
+					
+					for (size_t ii = 0; ii < this->SurfaceSpeciesNamesList.size(); ii++)
+					{
+						if (SurfaceMastersList[ii] == master)
+						{
+							double conc = species_conc[ii * this->nxyz + j];
+							charge += conc*SurfaceSpeciesZList[ii];
+							cxxNameDouble::iterator it = this->SurfaceSpeciesStoichiometry[ii].begin();
+							for (; it != this->SurfaceSpeciesStoichiometry[ii].end(); it++)
+							{
+								surface_totals.add(it->first.c_str(), it->second * conc);
+							}
+						}
+					}
+
+
+					cxxNameDouble nd;
+
+#ifdef USE_MPI
+					int l = i - this->start_cell[n];
+					surface_totals.multiply(area);
+					charge *=area;
+#else
+					surface_totals.multiply(area);
+					charge *=area;
+#endif
+					cxxNameDouble::iterator it = surface_totals.begin();
+					for (; it != surface_totals.end(); it++)
+					{
+						nd.add(it->first.c_str(), it->second);
+					}
+
+					comp_ref.Update(nd);
+					comp_ref.Set_charge_balance(charge);
+					charge_ptr->Set_charge_balance(charge);
+				}
+			}
+		}
+		return IRM_OK;
+	}
+	return IRM_INVALIDARG;
+}
+/* ---------------------------------------------------------------------- */
 IRM_RESULT PhreeqcRM::StateSave(int istate) 
 {
 #ifdef USE_MPI

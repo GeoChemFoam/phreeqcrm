@@ -1087,6 +1087,55 @@ RM_GetSurfaceName(int  id, int num, char *name, int  l1)
 }
 
 /* ---------------------------------------------------------------------- */
+IRM_RESULT
+RM_GetSurfaceArea(int id, std::string name, double * a)
+/* ---------------------------------------------------------------------- */
+{
+	PhreeqcRM * Reaction_module_ptr = PhreeqcRM::GetInstance(id);
+	if (Reaction_module_ptr)
+	{
+		if (a != NULL)
+		{
+			IRM_RESULT return_value = IRM_OK;
+			std::vector<double> a_vector;
+			return_value = Reaction_module_ptr->GetSurfaceArea(name, a_vector);
+			if (return_value == IRM_OK)
+			{
+				memcpy(a, &a_vector.front(), a_vector.size()*sizeof(double));
+			}
+			return return_value;
+		}
+		return IRM_INVALIDARG;
+	}
+	return IRM_BADINSTANCE;
+}
+
+/* ---------------------------------------------------------------------- */
+IRM_RESULT
+RM_GetSurfaceSpeciesConcentrations(int id, double * species_conc)
+/* ---------------------------------------------------------------------- */
+{
+	PhreeqcRM * Reaction_module_ptr = PhreeqcRM::GetInstance(id);
+	if (Reaction_module_ptr)
+	{
+		if (species_conc != NULL)
+		{
+			IRM_RESULT return_value = IRM_OK;
+			std::vector<double> species_conc_vector;
+			return_value = Reaction_module_ptr->GetSurfaceSpeciesConcentrations(species_conc_vector);
+			if (return_value == IRM_OK)
+			{
+				memcpy(species_conc, &species_conc_vector.front(), species_conc_vector.size()*sizeof(double));
+			}
+			return return_value;
+		}
+		return IRM_INVALIDARG;
+	}
+	return IRM_BADINSTANCE;
+}
+
+/* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
 int
 RM_GetEquilibriumPhasesCount(int  id)
 /* ---------------------------------------------------------------------- */
@@ -2975,6 +3024,30 @@ RM_SpeciesConcentrations2Module(int id, double * species_conc)
 	}
 	return IRM_BADINSTANCE;
 }
+
+/* ---------------------------------------------------------------------- */
+IRM_RESULT
+RM_SurfaceSpeciesConcentrations2Module(int id, double * species_conc)
+/* ---------------------------------------------------------------------- */
+{
+	PhreeqcRM * Reaction_module_ptr = PhreeqcRM::GetInstance(id);
+	if (Reaction_module_ptr)
+	{
+		if (species_conc)
+		{
+			IRM_RESULT return_value = IRM_OK;
+			std::vector<double> species_conc_vector;
+			species_conc_vector.resize(Reaction_module_ptr->GetGridCellCount() * Reaction_module_ptr->GetSurfaceSpeciesCount());
+			memcpy(&species_conc_vector.front(), species_conc, species_conc_vector.size()*sizeof(double));
+			return_value = Reaction_module_ptr->SurfaceSpeciesConcentrations2Module(species_conc_vector);
+			return return_value;
+		}
+		return IRM_INVALIDARG;
+	}
+	return IRM_BADINSTANCE;
+}
+
+
 /* ---------------------------------------------------------------------- */
 IRM_RESULT
 RM_StateSave(int id, int istate)

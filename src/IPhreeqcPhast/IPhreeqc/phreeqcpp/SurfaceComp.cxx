@@ -457,6 +457,14 @@ cxxSurfaceComp::multiply(LDBLE extensive)
 	this->charge_balance *= extensive;
 }
 void
+cxxSurfaceComp::Update(const cxxNameDouble &const_nd)
+{
+	// update totals
+	this->totals = const_nd;
+}
+
+
+void
 cxxSurfaceComp::Serialize(Dictionary & dictionary, std::vector < int >&ints, std::vector < double >&doubles)
 {
 	ints.push_back(dictionary.Find(this->formula));

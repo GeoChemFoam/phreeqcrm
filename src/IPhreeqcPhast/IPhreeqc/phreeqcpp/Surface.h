@@ -42,6 +42,8 @@ public:
 	void add(const cxxSurface & addee, LDBLE extensive);
 	void multiply(LDBLE extensive);
 
+	LDBLE Get_total(const char *string) const;
+	std::map<int, double> & Get_species_map(void)       { return this->species_map; }
 	std::vector < cxxSurfaceComp > & Get_surface_comps() {return this->surface_comps;}
 	const std::vector < cxxSurfaceComp > & Get_surface_comps()const {return this->surface_comps;}
 	void Set_surface_comps(std::vector < cxxSurfaceComp > &sc) {this->surface_comps = sc;}
@@ -103,6 +105,7 @@ protected:
 	bool solution_equilibria;
 	int n_solution;
 	const static std::vector < std::string > vopts;
+	std::map<int, double> species_map;
 };
 
 #endif // !defined(SURFACE_H_INCLUDED)
