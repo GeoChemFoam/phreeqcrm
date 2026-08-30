@@ -218,7 +218,6 @@ cxxSurface::read_raw(CParser & parser, bool check)
 	bool DDL_viscosity_defined(false);
 	bool DDL_limit_defined(false);
 	bool transport_defined(false);
-	this->species_map.clear();
 
 	for (;;)
 	{
