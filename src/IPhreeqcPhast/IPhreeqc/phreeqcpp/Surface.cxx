@@ -173,6 +173,20 @@ cxxSurface::dump_raw(std::ostream & s_oss, unsigned int indent, int *n_out) cons
 	s_oss << indent1 << "# Surface workspace variables #\n";
 	s_oss << indent1;
 	s_oss << "-transport                 " << this->transport << "\n";
+
+	// Surface species concentrations saved by the GeoChemFoam extension.
+	// Emit one option per entry so SURFACE_RAW can restore the derived state
+	// without running an additional equilibrium calculation.
+	for (std::map<int, double>::const_iterator it = this->species_map.begin();
+		 it != this->species_map.end(); ++it)
+	{
+		s_oss << indent1;
+		s_oss << "-species_map              "
+			  << it->first << " " << it->second << "\n";
+	}
+
+	// Keep totals last: its nested raw reader consumes input until the next
+	// keyword and does not return a following SURFACE_RAW option to this reader.
 	s_oss << indent1;
 	s_oss << "-totals                    " << "\n";
 	this->totals.dump_raw(s_oss, indent + 2);
@@ -486,6 +500,29 @@ cxxSurface::read_raw(CParser & parser, bool check)
 			}
 			//correct_D_defined = true;
 			break;
+		case 20:				// species_map
+			{
+				int species_number;
+				double concentration;
+				if
+				(
+					!(parser.get_iss() >> species_number >> concentration)
+				)
+				{
+					parser.incr_input_error();
+					parser.error_msg
+					(
+						"Expected species number and concentration for "
+						"surface species_map.",
+						PHRQ_io::OT_CONTINUE
+					);
+				}
+				else
+				{
+					this->species_map[species_number] = concentration;
+				}
+			}
+			break;
 		}
 		if (opt == CParser::OPT_EOF || opt == CParser::OPT_KEYWORD)
 			break;
@@ -581,6 +618,7 @@ cxxSurface::add(const cxxSurface & addee_in, LDBLE extensive)
 	cxxSurface addee = addee_in;
 	if (extensive == 0.0)
 		return;
+	const bool first_surface = this->surface_comps.empty();
 	if (this->surface_comps.size() == 0)
 	{
 		this->only_counter_ions = addee.only_counter_ions;
@@ -595,6 +633,19 @@ cxxSurface::add(const cxxSurface & addee_in, LDBLE extensive)
 		this->solution_equilibria = addee.solution_equilibria;
 		this->n_solution = addee.n_solution;
 		this->transport = addee.transport;
+	}
+
+	// The saved concentrations are intensive derived state. Preserve them for
+	// the one-source copy used by InitialPhreeqc2Module on restart. A genuine
+	// mixture needs a chemistry calculation and must not retain either source's
+	// derived values as though they described the mixture.
+	if (first_surface)
+	{
+		this->species_map = addee.species_map;
+	}
+	else
+	{
+		this->species_map.clear();
 	}
 
 	for (size_t i_add = 0; i_add < addee.Get_surface_comps().size(); i_add++)
@@ -773,6 +824,13 @@ cxxSurface::Serialize(Dictionary & dictionary, std::vector < int >&ints,
 	ints.push_back(this->correct_D ? 1 : 0);
 	ints.push_back(this->transport ? 1 : 0);
 	this->totals.Serialize(dictionary, ints, doubles);
+	ints.push_back((int) this->species_map.size());
+	for (std::map<int, double>::const_iterator it = this->species_map.begin();
+		 it != this->species_map.end(); ++it)
+	{
+		ints.push_back(it->first);
+		doubles.push_back(it->second);
+	}
 	ints.push_back(this->solution_equilibria ? 1 : 0);
 	ints.push_back((int) this->n_solution);
 
@@ -820,6 +878,14 @@ cxxSurface::Deserialize(Dictionary & dictionary, std::vector < int >&ints,
 	this->correct_D = (ints[ii++] != 0);
 	this->transport = (ints[ii++] != 0);
 	this->totals.Deserialize(dictionary, ints, doubles, ii, dd);
+	this->species_map.clear();
+	{
+		int count = ints[ii++];
+		for (int n = 0; n < count; ++n)
+		{
+			this->species_map[ints[ii++]] = doubles[dd++];
+		}
+	}
 	this->solution_equilibria = (ints[ii++] != 0);
 	this->n_solution = ints[ii++];
 
@@ -846,6 +912,7 @@ const std::vector< std::string >::value_type temp_vopts[] = {
 	std::vector< std::string >::value_type("n_solution"),	        // 16
 	std::vector< std::string >::value_type("totals"), 	            // 17
 	std::vector< std::string >::value_type("tidied"),	            // 18
-	std::vector< std::string >::value_type("correct_d")	            // 19
+	std::vector< std::string >::value_type("correct_d"),	            // 19
+	std::vector< std::string >::value_type("species_map")            // 20
 };
 const std::vector< std::string > cxxSurface::vopts(temp_vopts, temp_vopts + sizeof temp_vopts / sizeof temp_vopts[0]);	

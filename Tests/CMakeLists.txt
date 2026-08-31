@@ -107,6 +107,13 @@ configure_file(all_reactants.pqi all_reactants.pqi COPYONLY)
 # Tests/phreeqc.dat
 configure_file(phreeqc.dat phreeqc.dat COPYONLY)
 
+if(NOT _PHREEQCRM_TEST_INSTALL)
+  # Focused surface-species dump, modify, serialization, and mixture regression.
+  add_executable(SurfaceSpeciesRestart SurfaceSpeciesRestart.cpp)
+  target_link_libraries(SurfaceSpeciesRestart PhreeqcRM::PhreeqcRM)
+  add_test(NAME SurfaceSpeciesRestart COMMAND SurfaceSpeciesRestart)
+endif()
+
 # Tests/units.pqi
 configure_file(units.pqi units.pqi COPYONLY)
 
