@@ -3605,14 +3605,14 @@ where @a nxyz is the number of user grid cells. Values for inactive cells are se
 <PRE>
 a = (double *) malloc((size_t) (nxyz * sizeof(double)));
 status = RM_RunCells(id);
-status = RM_GetSurfaceArea(id, a);
+status = RM_GetSurfaceArea(id, "Hfo", a);
 </PRE>
 </CODE>
 @endhtmlonly
 @par MPI:
 Called by root, workers must be in the loop of @ref RM_MpiWorker.
 */
-IRM_DLL_EXPORT IRM_RESULT RM_GetSurfaceArea(int id, std::string name, double *a);
+IRM_DLL_EXPORT IRM_RESULT RM_GetSurfaceArea(int id, const char *name, double *a);
 /**
 Returns the number of surface species (such as "Hfo_wOH") in the initial-phreeqc module.
 @ref RM_FindComponents must be called before @ref RM_GetSurfaceSpeciesCount.
