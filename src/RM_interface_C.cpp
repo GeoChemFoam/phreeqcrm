@@ -1088,13 +1088,13 @@ RM_GetSurfaceName(int  id, int num, char *name, int  l1)
 
 /* ---------------------------------------------------------------------- */
 IRM_RESULT
-RM_GetSurfaceArea(int id, std::string name, double * a)
+RM_GetSurfaceArea(int id, const char *name, double * a)
 /* ---------------------------------------------------------------------- */
 {
 	PhreeqcRM * Reaction_module_ptr = PhreeqcRM::GetInstance(id);
 	if (Reaction_module_ptr)
 	{
-		if (a != NULL)
+		if (name != NULL && a != NULL)
 		{
 			IRM_RESULT return_value = IRM_OK;
 			std::vector<double> a_vector;
@@ -3117,4 +3117,3 @@ RM_WarningMessage(int id, const char *err_str)
 	}
 	return IRM_BADINSTANCE;
 }
-
