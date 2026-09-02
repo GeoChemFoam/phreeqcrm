@@ -1449,10 +1449,6 @@ xsurface_save(int n_user)
 	temp_surface.Set_solution_equilibria(false);
 	temp_surface.Set_n_solution(-999);
 
-	if (temp_surface.Get_type() == cxxSurface::NO_EDL)
-	{
-		temp_surface.Get_surface_charges().clear();
-	}
 /*
  *   Write surface_comp structure for each surf component into comps_ptr
  */
